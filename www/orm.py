@@ -18,12 +18,19 @@ async def create_pool(loop, **kwargs):
         user=kwargs['user'],
         password=kwargs['password'],
         db=kwargs['db'],
-        charset=kwargs.get('charset', 'utf-8'),
+        charset=kwargs.get('charset', 'utf8'),
         autocommit=kwargs.get('autocommit', True),
         maxsize=kwargs.get('maxsize', 10),
         minsize=kwargs.get('minsize', 1),
         loop=loop
     )
+
+
+async def destroy_pool():
+    global __pool
+    if __pool is not None:
+        __pool.close()
+        await __pool.wait_closed()
 
 
 async def select(sql, args, size=None):
@@ -86,6 +93,30 @@ class StringField(Field):
 
     def __init__(self, name=None, primary_key=False, default=None, ddl='varchar(100)'):
         super(StringField, self).__init__(name, ddl, primary_key, default)
+
+
+class BooleanField(Field):
+
+    def __init__(self, name=None, default=False):
+        super().__init__(name, 'boolean', False, default)
+
+
+class IntegerField(Field):
+
+    def __init__(self, name=None, primary_key=False, default=0):
+        super().__init__(name, 'bigint', primary_key, default)
+
+
+class FloatField(Field):
+
+    def __init__(self, name=None, primary_key=False, default=0.0):
+        super().__init__(name, 'real', primary_key, default)
+
+
+class TextField(Field):
+
+    def __init__(self, name=None, default=None):
+        super().__init__(name, 'text', False, default)
 
 
 # 编写ModelMetaclass
