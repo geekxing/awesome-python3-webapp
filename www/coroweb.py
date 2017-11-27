@@ -94,7 +94,7 @@ def has_request_arg(fn):    # 判断是否含有名叫'request'的参数，且�
             param.kind != inspect.Parameter.KEYWORD_ONLY and
             param.kind != inspect.Parameter.VAR_KEYWORD):
             # 若判断为True，表明param只能是位置参数。且该参数位于request之后，故不满足条件，报错。
-            raise ValueError('request params must be the last named param in function: %s%s' % (fn.__name__, str(sig)))
+            raise ValueError('request params must be the last named param in function.js: %s%s' % (fn.__name__, str(sig)))
     return found
 
 

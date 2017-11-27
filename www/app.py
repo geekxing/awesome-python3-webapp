@@ -1,15 +1,14 @@
 __author__ = 'Larry'
 
 import logging; logging.basicConfig(level=logging.INFO)
-
 import asyncio, os, json, time
 from datetime import datetime
-
 from aiohttp import web
 from jinja2 import Environment, FileSystemLoader
-
 import orm
 from coroweb import add_routes, add_static
+from config import configs
+from handlers import cookie2user, COOKIE_NAME
 
 
 # 3. 初始化jinja2模板
@@ -42,9 +41,9 @@ def init_jinja2(app, **kw):
         for name, f in filters.items():
             # filters是Environment类的属性：过滤器字典
             env.filters[name] = f
-    # 所有的一切是为了给app添加__templating__字段
+    # 所有的一切是为了给app添加__template__字段
     # 前面将jinja2的环境配置都赋值给env了，这里再把env存入app的dict中，这样app就知道要到哪儿去找模板，怎么解析模板。
-    app['__templates__'] = env
+    app['__template__'] = env
 
 
 # middleware是一种拦截器，一个URL在被某个函数处理前，可以经过一系列的middleware的处理。
@@ -55,6 +54,24 @@ async def logger_factory(app, handler):
         logging.info('Request: %s %s' % (request.method, request.path))
         return await handler(request)
     return logger
+
+
+# 利用middle在处理URL之前，把cookie解析出来，并将登录用户绑定到request对象上，
+# 这样，后续的URL处理函数就可以直接拿到登录用户：
+async def auth_factory(app, handler):
+    async def auth(request):
+        logging.info('check user: %s %s' % (request.method, request.path))
+        request.__user__ = None
+        cookie_str = request.cookies.get(COOKIE_NAME)
+        if cookie_str:
+            user = await cookie2user(cookie_str)
+            if user:
+                logging.info('set current user: %s' % user.email)
+                request.__user__ = user
+            if request.path.startswith('/manage') and (request.__user__ is None or not request.__user__.admin):
+                return web.HTTPFound('/signin')
+        return await handler(request)
+    return auth
 
 
 # 处理视图函数返回值，制作response的middleware
@@ -94,9 +111,9 @@ async def response_factory(app, handler):
                 resp.content_type = 'application/json;charset=utf-8'
                 return resp
             else:  # 带模板信息，渲染模板
-                # app['__templating__']获取已初始化的Environment对象，调用get_template()方法返回Template对象
+                # app['__template__']获取已初始化的Environment对象，调用get_template()方法返回Template对象
                 # 调用Template对象的render()方法，传入r渲染模板，返回unicode格式字符串，将其用utf-8编码
-                resp = web.Response(body=app['__templating__'].get_template(template).render(**r).encode('utf-8'))
+                resp = web.Response(body=app['__template__'].get_template(template).render(**r).encode('utf-8'))
                 resp.content_type = 'text/html;charset=utf-8'
                 return resp
         # 返回响应码
@@ -131,9 +148,9 @@ def datetime_filter(t):
 if __name__ == '__main__':
 
     async def init(loop):
-        # await orm.create_pool(loop, host='127.0.0.1', port=3306, user='www', password='www', db='awesome')
+        await orm.create_pool(loop, **configs['db'])
         app = web.Application(loop=loop, middlewares=[
-            logger_factory, response_factory
+            logger_factory, auth_factory, response_factory
         ])
         init_jinja2(app, filters=dict(datetime=datetime_filter))
         add_routes(app, 'handlers')
