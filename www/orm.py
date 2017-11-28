@@ -150,7 +150,7 @@ class ModelMetaclass(type):
             attrs.pop(k)
         escaped_fields = list(map(lambda f: '`%s`' % f, fields))
         attrs['__mappings__'] = mappings  # 保存属性和列的映射关系
-        attrs['__table__'] = name  # 假设表名和类名一致
+        attrs['__table__'] = table_name  # 假设表名和类名一致
         attrs['__primary_key__'] = primary_key  # 主键属性名
         attrs['__fields__'] = fields  # 除了主键外的属性名
         # 构造默认的SELECT, INSERT, UPDATE和DELETE语句
@@ -218,6 +218,18 @@ class Model(dict, metaclass=ModelMetaclass):
         return [cls(**r) for r in rs]
 
     @classmethod
+    async def findnumber(cls, selectField, where=None, args=None):
+        """ find number by select and where. """
+        sql = ['select %s _num_ from %s' % (selectField, cls.__table__)]
+        if where:
+            sql.append('where')
+            sql.append(where)
+        rs = await select(' '.join(sql), args, 1)
+        if len(rs) == 0:
+            return None
+        return rs[0]['_num_']
+
+    @classmethod
     async def find(cls, pk):
         """ find object by primary key. """
         rs = await select('%s where `%s`=?' % (cls.__select__, cls.__primary_key__), [pk], 1)
@@ -240,6 +252,7 @@ class Model(dict, metaclass=ModelMetaclass):
             logging.warning('failed to update record: affect row: %s' % rows)
 
     async def remove(self):
+        logging.info('begin to delete')
         args = [self.getvalue_or_default(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
         if rows != 1:
